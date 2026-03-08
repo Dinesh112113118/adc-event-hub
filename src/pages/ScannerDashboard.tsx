@@ -26,12 +26,33 @@ const ScannerDashboard = () => {
   const [scanHistory, setScanHistory] = useState<{ name: string; success: boolean; time: string }[]>([]);
 
   const user = JSON.parse(localStorage.getItem("adc_user") || "{}");
+
+  const eventRegs = registrations.filter((r) => r.eventId === selectedEvent);
+
+  const processScan = useCallback((code: string) => {
+    if (!selectedEvent) {
+      toast({ title: "Select an event first", variant: "destructive" });
+      return;
+    }
+
+    const reg = registrations.find((r) => r.qrCode === code.trim() && r.eventId === selectedEvent);
+    let result;
+    if (reg) {
+      result = addScan(reg.id, user.username || "scanner");
+    } else {
+      result = { success: false, name: "Unknown", message: "Invalid QR code — not found for this event" };
+    }
+    setScanResult(result);
+    setScanHistory((prev) => [
+      { name: result.name, success: result.success, time: new Date().toLocaleTimeString() },
+      ...prev.slice(0, 19),
+    ]);
+  }, [selectedEvent, registrations, addScan, user.username, toast]);
+
   if (user.role !== "scanner" && user.role !== "admin") {
     navigate("/login");
     return null;
   }
-
-  const eventRegs = registrations.filter((r) => r.eventId === selectedEvent);
 
   const processScan = useCallback((code: string) => {
     if (!selectedEvent) {
