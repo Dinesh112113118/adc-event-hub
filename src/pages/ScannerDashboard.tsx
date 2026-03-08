@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { QrCode, Zap, LogOut, CheckCircle2, XCircle, Camera } from "lucide-react";
+import { QrCode, Zap, LogOut, CheckCircle2, XCircle, Camera, ScanLine } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,21 +11,25 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { mockEvents, mockRegistrations } from "@/types/event";
+import { useEvents } from "@/context/EventContext";
 import { useToast } from "@/hooks/use-toast";
 
 const ScannerDashboard = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { events, registrations, addScan } = useEvents();
   const [selectedEvent, setSelectedEvent] = useState("");
   const [qrInput, setQrInput] = useState("");
   const [scanResult, setScanResult] = useState<null | { success: boolean; name: string; message: string }>(null);
+  const [scanHistory, setScanHistory] = useState<{ name: string; success: boolean; time: string }[]>([]);
 
   const user = JSON.parse(localStorage.getItem("adc_user") || "{}");
   if (user.role !== "scanner" && user.role !== "admin") {
     navigate("/login");
     return null;
   }
+
+  const eventRegs = registrations.filter((r) => r.eventId === selectedEvent);
 
   const handleScan = () => {
     if (!selectedEvent) {
@@ -37,15 +41,21 @@ const ScannerDashboard = () => {
       return;
     }
 
-    const reg = mockRegistrations.find((r) => r.qrCode === qrInput.trim() && r.eventId === selectedEvent);
+    const reg = registrations.find((r) => r.qrCode === qrInput.trim() && r.eventId === selectedEvent);
     if (reg) {
-      if (reg.scans.length > 0) {
-        setScanResult({ success: false, name: reg.name, message: "Already scanned!" });
-      } else {
-        setScanResult({ success: true, name: reg.name, message: "Entry confirmed ✓" });
-      }
+      const result = addScan(reg.id, user.username || "scanner");
+      setScanResult(result);
+      setScanHistory((prev) => [
+        { name: result.name, success: result.success, time: new Date().toLocaleTimeString() },
+        ...prev.slice(0, 19),
+      ]);
     } else {
-      setScanResult({ success: false, name: "Unknown", message: "Invalid QR code" });
+      const result = { success: false, name: "Unknown", message: "Invalid QR code — not found for this event" };
+      setScanResult(result);
+      setScanHistory((prev) => [
+        { name: "Unknown", success: false, time: new Date().toLocaleTimeString() },
+        ...prev.slice(0, 19),
+      ]);
     }
     setQrInput("");
   };
@@ -71,7 +81,7 @@ const ScannerDashboard = () => {
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-6 max-w-md space-y-6">
+      <main className="container mx-auto px-4 py-6 max-w-lg space-y-6">
         <div className="animate-in text-center">
           <div className="inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 mb-4 animate-pulse-glow">
             <Camera className="h-8 w-8 text-primary" />
@@ -88,7 +98,7 @@ const ScannerDashboard = () => {
                 <SelectValue placeholder="Choose event..." />
               </SelectTrigger>
               <SelectContent>
-                {mockEvents
+                {events
                   .filter((e) => e.status === "published")
                   .map((e) => (
                     <SelectItem key={e.id} value={e.id}>
@@ -99,6 +109,25 @@ const ScannerDashboard = () => {
             </Select>
           </div>
 
+          {selectedEvent && (
+            <div className="rounded-lg bg-muted/30 p-3 text-xs space-y-1">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Registered</span>
+                <span className="font-medium">{eventRegs.length}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Scanned today</span>
+                <span className="font-medium text-success">
+                  {eventRegs.filter((r) => r.scans.some((s) => new Date(s.scannedAt).toDateString() === new Date().toDateString())).length}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Scan mode</span>
+                <span className="font-medium">{events.find((e) => e.id === selectedEvent)?.scanMode}</span>
+              </div>
+            </div>
+          )}
+
           <div className="space-y-2">
             <Label>QR Code</Label>
             <Input
@@ -106,6 +135,7 @@ const ScannerDashboard = () => {
               onChange={(e) => setQrInput(e.target.value)}
               placeholder="Enter or scan QR code..."
               onKeyDown={(e) => e.key === "Enter" && handleScan()}
+              autoFocus
             />
           </div>
 
@@ -134,19 +164,41 @@ const ScannerDashboard = () => {
           </div>
         )}
 
+        {/* Scan History */}
+        {scanHistory.length > 0 && (
+          <div className="rounded-xl border border-border bg-card p-4 space-y-2">
+            <p className="text-sm font-medium flex items-center gap-2">
+              <ScanLine className="h-4 w-4 text-primary" />
+              Scan History ({scanHistory.length})
+            </p>
+            <div className="space-y-1">
+              {scanHistory.map((entry, i) => (
+                <div key={i} className="flex items-center gap-2 rounded-lg bg-muted/30 px-3 py-1.5 text-xs">
+                  <div className={`h-1.5 w-1.5 rounded-full shrink-0 ${entry.success ? "bg-success" : "bg-destructive"}`} />
+                  <span className="font-medium">{entry.name}</span>
+                  <span className="text-muted-foreground ml-auto">{entry.time}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Demo QR codes */}
         <div className="rounded-xl border border-border bg-card p-4">
           <p className="text-xs text-muted-foreground mb-2">Demo QR codes (for testing)</p>
           <div className="space-y-1">
-            {mockRegistrations.map((r) => (
-              <button
-                key={r.id}
-                onClick={() => setQrInput(r.qrCode)}
-                className="block w-full text-left rounded-lg bg-muted px-3 py-2 text-xs font-mono hover:bg-muted/80 transition-colors"
-              >
-                {r.qrCode} — {r.name}
-              </button>
-            ))}
+            {registrations
+              .filter((r) => r.eventId === selectedEvent || !selectedEvent)
+              .slice(0, 5)
+              .map((r) => (
+                <button
+                  key={r.id}
+                  onClick={() => setQrInput(r.qrCode)}
+                  className="block w-full text-left rounded-lg bg-muted px-3 py-2 text-xs font-mono hover:bg-muted/80 transition-colors"
+                >
+                  {r.qrCode} — {r.name}
+                </button>
+              ))}
           </div>
         </div>
       </main>

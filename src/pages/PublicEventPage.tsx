@@ -4,16 +4,16 @@ import { Calendar, MapPin, Users, Zap, Clock, CreditCard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import { mockEvents } from "@/types/event";
+import { useEvents } from "@/context/EventContext";
 import { useToast } from "@/hooks/use-toast";
 
 const PublicEventPage = () => {
   const { slug } = useParams();
   const { toast } = useToast();
+  const { getEventBySlug, addRegistration } = useEvents();
   const [submitted, setSubmitted] = useState(false);
 
-  const event = mockEvents.find((e) => e.slug === slug);
+  const event = getEventBySlug(slug || "");
 
   if (!event) {
     return (
@@ -28,8 +28,22 @@ const PublicEventPage = () => {
 
   const isFull = event.registeredCount >= event.maxCapacity;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    const form = e.currentTarget;
+    const data = new FormData(form);
+
+    addRegistration({
+      eventId: event.id,
+      name: data.get("name") as string,
+      email: data.get("email") as string,
+      phone: data.get("phone") as string,
+      college: (data.get("college") as string) || undefined,
+      department: (data.get("dept") as string) || undefined,
+      year: (data.get("year") as string) || undefined,
+      paymentStatus: event.paymentRequired ? (event.paymentCollectLater ? "collect_later" : "pending") : "free",
+    });
+
     setSubmitted(true);
     toast({ title: "Registration successful!", description: "Your ticket and QR code have been sent to your email." });
   };
@@ -70,21 +84,18 @@ const PublicEventPage = () => {
 
       <main className="container mx-auto px-4 py-8 max-w-2xl">
         <div className="animate-in space-y-6">
-          {/* Event Info */}
           <div className="rounded-xl border border-border bg-card p-6 space-y-4">
             <div className="flex items-start justify-between">
               <div>
                 <h1 className="text-2xl font-bold">{event.title}</h1>
                 <p className="text-sm text-muted-foreground mt-1">by Aliet Techpreneur Club</p>
               </div>
-              {event.paymentRequired && (
-                <Badge className="bg-primary/20 text-primary border-primary/30">
-                  <CreditCard className="h-3 w-3 mr-1" />
-                  ₹{event.paymentAmount}
-                </Badge>
-              )}
-              {!event.paymentRequired && (
-                <Badge className="bg-success/20 text-success border-success/30">Free</Badge>
+              {event.paymentRequired ? (
+                <span className="inline-flex items-center rounded-full border bg-primary/20 text-primary border-primary/30 px-2.5 py-0.5 text-xs font-medium">
+                  <CreditCard className="h-3 w-3 mr-1" />₹{event.paymentAmount}
+                </span>
+              ) : (
+                <span className="inline-flex items-center rounded-full border bg-success/20 text-success border-success/30 px-2.5 py-0.5 text-xs font-medium">Free</span>
               )}
             </div>
 
@@ -110,7 +121,6 @@ const PublicEventPage = () => {
             </div>
           </div>
 
-          {/* Registration Form */}
           {isFull ? (
             <div className="rounded-xl border border-destructive/30 bg-destructive/10 p-6 text-center">
               <p className="font-semibold text-destructive">Registrations Full</p>
@@ -122,27 +132,27 @@ const PublicEventPage = () => {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="name">Full Name *</Label>
-                  <Input id="name" placeholder="John Doe" required />
+                  <Input id="name" name="name" placeholder="John Doe" required />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="email">Email *</Label>
-                  <Input id="email" type="email" placeholder="john@email.com" required />
+                  <Input id="email" name="email" type="email" placeholder="john@email.com" required />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="phone">Phone *</Label>
-                  <Input id="phone" type="tel" placeholder="9876543210" required />
+                  <Input id="phone" name="phone" type="tel" placeholder="9876543210" required />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="college">College / Institution</Label>
-                  <Input id="college" placeholder="Your college" />
+                  <Input id="college" name="college" placeholder="Your college" />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="dept">Department</Label>
-                  <Input id="dept" placeholder="e.g. CSE" />
+                  <Input id="dept" name="dept" placeholder="e.g. CSE" />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="year">Year</Label>
-                  <Input id="year" placeholder="e.g. 3rd" />
+                  <Input id="year" name="year" placeholder="e.g. 3rd" />
                 </div>
               </div>
               <Button type="submit" className="w-full">
