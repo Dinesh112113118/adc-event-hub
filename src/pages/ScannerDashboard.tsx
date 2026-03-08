@@ -54,25 +54,6 @@ const ScannerDashboard = () => {
     return null;
   }
 
-  const processScan = useCallback((code: string) => {
-    if (!selectedEvent) {
-      toast({ title: "Select an event first", variant: "destructive" });
-      return;
-    }
-
-    const reg = registrations.find((r) => r.qrCode === code.trim() && r.eventId === selectedEvent);
-    let result;
-    if (reg) {
-      result = addScan(reg.id, user.username || "scanner");
-    } else {
-      result = { success: false, name: "Unknown", message: "Invalid QR code — not found for this event" };
-    }
-    setScanResult(result);
-    setScanHistory((prev) => [
-      { name: result.name, success: result.success, time: new Date().toLocaleTimeString() },
-      ...prev.slice(0, 19),
-    ]);
-  }, [selectedEvent, registrations, addScan, user.username, toast]);
 
   const handleManualScan = () => {
     if (!qrInput.trim()) {
