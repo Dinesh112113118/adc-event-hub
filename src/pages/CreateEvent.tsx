@@ -13,16 +13,39 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useEvents } from "@/context/EventContext";
 import { useToast } from "@/hooks/use-toast";
 
 const CreateEvent = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { addEvent } = useEvents();
   const [paymentRequired, setPaymentRequired] = useState(false);
   const [collectLater, setCollectLater] = useState(false);
+  const [scanMode, setScanMode] = useState<"single" | "multiple" | "daily">("single");
+  const [maxScansPerDay, setMaxScansPerDay] = useState(1);
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    const form = e.currentTarget;
+    const data = new FormData(form);
+
+    addEvent({
+      title: data.get("title") as string,
+      description: data.get("description") as string,
+      date: data.get("date") as string,
+      endDate: (data.get("endDate") as string) || undefined,
+      venue: data.get("venue") as string,
+      maxCapacity: parseInt(data.get("capacity") as string),
+      status: "published",
+      paymentRequired,
+      paymentAmount: paymentRequired ? parseFloat(data.get("amount") as string) || 0 : undefined,
+      paymentCollectLater: collectLater,
+      scanMode,
+      maxScansPerDay: scanMode !== "single" ? maxScansPerDay : undefined,
+      totalDays: scanMode === "daily" ? parseInt(data.get("totalDays") as string) || 1 : undefined,
+    });
+
     toast({ title: "Event created!", description: "Your event is now live." });
     navigate("/admin");
   };
@@ -47,38 +70,36 @@ const CreateEvent = () => {
 
       <main className="container mx-auto px-4 py-6 max-w-2xl">
         <form onSubmit={handleSubmit} className="space-y-6 animate-in">
-          {/* Basic Info */}
           <section className="rounded-xl border border-border bg-card p-6 space-y-4">
             <h2 className="font-semibold text-lg">Basic Information</h2>
             <div className="space-y-2">
               <Label htmlFor="title">Event Title *</Label>
-              <Input id="title" placeholder="e.g. TechTalk: AI & Future" required />
+              <Input id="title" name="title" placeholder="e.g. TechTalk: AI & Future" required />
             </div>
             <div className="space-y-2">
               <Label htmlFor="description">Description *</Label>
-              <Textarea id="description" placeholder="Describe your event..." rows={4} required />
+              <Textarea id="description" name="description" placeholder="Describe your event..." rows={4} required />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="date">Start Date & Time *</Label>
-                <Input id="date" type="datetime-local" required />
+                <Input id="date" name="date" type="datetime-local" required />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="endDate">End Date & Time</Label>
-                <Input id="endDate" type="datetime-local" />
+                <Input id="endDate" name="endDate" type="datetime-local" />
               </div>
             </div>
             <div className="space-y-2">
               <Label htmlFor="venue">Venue *</Label>
-              <Input id="venue" placeholder="e.g. Main Auditorium, Block A" required />
+              <Input id="venue" name="venue" placeholder="e.g. Main Auditorium, Block A" required />
             </div>
             <div className="space-y-2">
               <Label htmlFor="capacity">Max Capacity *</Label>
-              <Input id="capacity" type="number" min={1} placeholder="200" required />
+              <Input id="capacity" name="capacity" type="number" min={1} placeholder="200" required />
             </div>
           </section>
 
-          {/* Payment */}
           <section className="rounded-xl border border-border bg-card p-6 space-y-4">
             <h2 className="font-semibold text-lg">Payment Settings</h2>
             <div className="flex items-center justify-between">
@@ -92,7 +113,7 @@ const CreateEvent = () => {
               <>
                 <div className="space-y-2">
                   <Label htmlFor="amount">Amount (₹)</Label>
-                  <Input id="amount" type="number" min={1} placeholder="100" />
+                  <Input id="amount" name="amount" type="number" min={1} placeholder="100" />
                 </div>
                 <div className="flex items-center justify-between">
                   <div>
@@ -105,12 +126,11 @@ const CreateEvent = () => {
             )}
           </section>
 
-          {/* Scan Config */}
           <section className="rounded-xl border border-border bg-card p-6 space-y-4">
             <h2 className="font-semibold text-lg">Attendance Settings</h2>
             <div className="space-y-2">
               <Label>Scan Mode</Label>
-              <Select defaultValue="single">
+              <Select value={scanMode} onValueChange={(v) => setScanMode(v as typeof scanMode)}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -121,6 +141,23 @@ const CreateEvent = () => {
                 </SelectContent>
               </Select>
             </div>
+            {scanMode !== "single" && (
+              <div className="space-y-2">
+                <Label>Max scans per day</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  value={maxScansPerDay}
+                  onChange={(e) => setMaxScansPerDay(parseInt(e.target.value) || 1)}
+                />
+              </div>
+            )}
+            {scanMode === "daily" && (
+              <div className="space-y-2">
+                <Label htmlFor="totalDays">Total Days</Label>
+                <Input id="totalDays" name="totalDays" type="number" min={1} placeholder="3" />
+              </div>
+            )}
           </section>
 
           <div className="flex gap-3 justify-end">
