@@ -12,6 +12,7 @@ interface EventContextType {
   getEventRegistrations: (eventId: string) => Registration[];
   getEventById: (id: string) => Event | undefined;
   getEventBySlug: (slug: string) => Event | undefined;
+  updateEmailStatus: (registrationIds: string[], status: Registration["emailStatus"]) => void;
 }
 
 const EventContext = createContext<EventContextType | null>(null);
@@ -110,6 +111,12 @@ export const EventProvider = ({ children }: { children: ReactNode }) => {
     };
   };
 
+  const updateEmailStatus = (registrationIds: string[], status: Registration["emailStatus"]) => {
+    setRegistrations((prev) =>
+      prev.map((r) => (registrationIds.includes(r.id) ? { ...r, emailStatus: status } : r))
+    );
+  };
+
   const getEventRegistrations = (eventId: string) => registrations.filter((r) => r.eventId === eventId);
   const getEventById = (id: string) => events.find((e) => e.id === id);
   const getEventBySlug = (slug: string) => events.find((e) => e.slug === slug);
@@ -127,6 +134,7 @@ export const EventProvider = ({ children }: { children: ReactNode }) => {
         getEventRegistrations,
         getEventById,
         getEventBySlug,
+        updateEmailStatus,
       }}
     >
       {children}
