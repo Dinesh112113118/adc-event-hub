@@ -157,24 +157,55 @@ const ScannerDashboard = () => {
           </div>
         )}
 
-        {/* Manual Input */}
-        <div className="rounded-xl border border-border bg-card p-5 space-y-3">
+        {/* Manual Input & Search */}
+        <div className="rounded-xl border border-border bg-card p-5 space-y-3 relative">
           <h2 className="font-semibold text-sm flex items-center gap-2">
             <QrCode className="h-4 w-4 text-primary" />
-            Manual Entry
+            Manual Search & Entry
           </h2>
           <div className="flex gap-2">
             <Input
               value={qrInput}
               onChange={(e) => setQrInput(e.target.value)}
-              placeholder="Enter QR code..."
+              placeholder="Search by name, email, or scan QR..."
               onKeyDown={(e) => e.key === "Enter" && handleManualScan()}
               className="flex-1"
             />
-            <Button onClick={handleManualScan} disabled={!selectedEvent}>
-              Scan
+            <Button onClick={handleManualScan} disabled={!selectedEvent || !qrInput.trim()}>
+              Submit
             </Button>
           </div>
+
+          {/* Search Results Dropdown */}
+          {qrInput.length > 1 && selectedEvent && (
+            <div className="absolute left-0 right-0 top-[85%] mt-2 z-20 bg-card border border-border rounded-xl shadow-lg max-h-[300px] overflow-y-auto">
+              {eventRegs
+                .filter(r => r.name.toLowerCase().includes(qrInput.toLowerCase()) || r.email.toLowerCase().includes(qrInput.toLowerCase()) || r.qrCode.toLowerCase() === qrInput.toLowerCase())
+                .slice(0, 15)
+                .map(r => (
+                  <div key={r.id} className="flex items-center justify-between p-3 border-b border-border/50 hover:bg-muted/30 last:border-0 transition-colors">
+                    <div className="flex-1 min-w-0 pr-4">
+                      <p className="font-medium text-sm truncate">{r.name}</p>
+                      <p className="text-xs text-muted-foreground truncate">{r.email}</p>
+                    </div>
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        processScan(r.qrCode);
+                        setQrInput(""); // clear search after check in
+                      }}
+                    >
+                      Check In
+                    </Button>
+                  </div>
+                ))}
+              {eventRegs.filter(r => r.name.toLowerCase().includes(qrInput.toLowerCase()) || r.email.toLowerCase().includes(qrInput.toLowerCase()) || r.qrCode.toLowerCase() === qrInput.toLowerCase()).length === 0 && (
+                <div className="p-4 text-center text-sm text-muted-foreground">
+                  No participants found matching "{qrInput}"
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Scan Result */}
