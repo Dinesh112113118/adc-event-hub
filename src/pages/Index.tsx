@@ -12,7 +12,7 @@ const Index = () => {
             <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
               <Zap className="h-4 w-4 text-primary-foreground" />
             </div>
-            <span className="text-lg font-bold tracking-tight">ADC Events</span>
+            <span className="text-lg font-bold tracking-tight">ATC Events</span>
           </div>
           <Link to="/login">
             <Button variant="outline" size="sm" className="glow-border">
@@ -35,7 +35,7 @@ const Index = () => {
           </h1>
           <p className="text-lg text-muted-foreground max-w-xl mx-auto mb-10">
             Seamless event management — from registration to attendance tracking.
-            Built for ADC, powered by technology.
+            Built for ATC, powered by technology.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link to="/login">

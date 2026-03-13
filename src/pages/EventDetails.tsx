@@ -129,7 +129,7 @@ const EventDetails = () => {
           body: JSON.stringify({
             email: reg.email,
             name: reg.name,
-            eventTitle: event?.title || "ADC Event",
+            eventTitle: event?.title || "ATC Event",
             qrCodeDataUrl,
             template,
             department: reg.department,

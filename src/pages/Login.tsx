@@ -47,7 +47,7 @@ const Login = () => {
           <div className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-primary mb-4">
             <Zap className="h-6 w-6 text-primary-foreground" />
           </div>
-          <h1 className="text-2xl font-bold">ADC Events</h1>
+          <h1 className="text-2xl font-bold">ATC Events</h1>
           <p className="text-sm text-muted-foreground mt-1">Sign in to manage events</p>
         </div>
 

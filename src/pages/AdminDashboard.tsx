@@ -75,7 +75,7 @@ const AdminDashboard = () => {
             <div className="h-7 w-7 rounded-lg bg-primary flex items-center justify-center">
               <Zap className="h-3.5 w-3.5 text-primary-foreground" />
             </div>
-            <span className="font-semibold">ADC Admin</span>
+            <span className="font-semibold">ATC Admin</span>
           </div>
           <div className="flex items-center gap-3">
             <Link to="/scanner">
