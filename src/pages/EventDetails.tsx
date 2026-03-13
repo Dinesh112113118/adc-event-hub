@@ -3,28 +3,36 @@ import { useParams, Link } from "react-router-dom";
 import {
   ArrowLeft, Zap, Users, Download, Mail, Send, SendHorizontal,
   Search, UserCheck, Clock, QrCode, ScanLine, CheckCircle2,
-  XCircle, AlertCircle, Pencil, Filter, Check, X
+  XCircle, AlertCircle, Pencil, Filter, Check, X, Plus
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useEvents } from "@/context/EventContext";
 import { useToast } from "@/hooks/use-toast";
 import { defaultTicketTemplate, TicketTemplate } from "@/types/event";
 import TicketPreview from "@/components/TicketPreview";
 import TicketEditor from "@/components/TicketEditor";
+import QRCode from "qrcode";
 
 const EventDetails = () => {
   const { id } = useParams();
   const { toast } = useToast();
-  const { getEventById, getEventRegistrations, updateEmailStatus } = useEvents();
+  const { getEventById, getEventRegistrations, updateEmailStatus, addRegistration } = useEvents();
   const [search, setSearch] = useState("");
   const [template, setTemplate] = useState<TicketTemplate>(defaultTicketTemplate);
   const [showEditor, setShowEditor] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [emailFilter, setEmailFilter] = useState<"all" | "pending" | "sent" | "failed" | "invalid">("all");
   const [sending, setSending] = useState(false);
+  const [openAddUser, setOpenAddUser] = useState(false);
+  const [newUserName, setNewUserName] = useState("");
+  const [newUserEmail, setNewUserEmail] = useState("");
+  const [newUserPhone, setNewUserPhone] = useState("");
+  const [newUserDept, setNewUserDept] = useState("");
 
   const event = getEventById(id || "");
   const registrations = getEventRegistrations(id || "");
@@ -72,11 +80,34 @@ const EventDetails = () => {
     setSelectedIds(next);
   };
 
+  const handleAddUser = () => {
+    if (!newUserName.trim() || !newUserEmail.trim()) {
+      toast({ title: "Validation Error", description: "Name and Email are required.", variant: "destructive" });
+      return;
+    }
+    if (event) {
+      addRegistration({
+        eventId: event.id,
+        name: newUserName,
+        email: newUserEmail,
+        phone: newUserPhone,
+        department: newUserDept,
+        year: "",
+        emailStatus: "pending",
+      });
+      toast({ title: "User Added", description: `${newUserName} has been successfully registered.` });
+      setOpenAddUser(false);
+      setNewUserName("");
+      setNewUserEmail("");
+      setNewUserPhone("");
+      setNewUserDept("");
+    }
+  };
+
   const handleSendEmails = async () => {
-    const toSend = Array.from(selectedIds).filter((id) => {
-      const reg = registrations.find((r) => r.id === id);
-      return reg && reg.email.includes("@") && reg.emailStatus !== "invalid";
-    });
+    const toSend = Array.from(selectedIds)
+      .map(id => registrations.find(r => r.id === id))
+      .filter((reg): reg is NonNullable<typeof reg> => !!reg && reg.email.includes("@") && reg.emailStatus !== "invalid");
 
     if (toSend.length === 0) {
       toast({ title: "No valid recipients", description: "Select participants with valid emails.", variant: "destructive" });
@@ -84,19 +115,52 @@ const EventDetails = () => {
     }
 
     setSending(true);
+    let successCount = 0;
 
-    // Simulate email sending (in production, this would call an edge function)
-    for (let i = 0; i < toSend.length; i++) {
-      await new Promise((r) => setTimeout(r, 100));
-      updateEmailStatus([toSend[i]], "sent");
+    for (const reg of toSend) {
+      try {
+        const qrCodeDataUrl = await QRCode.toDataURL(reg.qrCode, { width: 400, margin: 2 });
+
+        const response = await fetch("https://jwedwyvcazykbpgwsxsq.supabase.co/functions/v1/send-ticket-email", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            email: reg.email,
+            name: reg.name,
+            eventTitle: event?.title || "ADC Event",
+            qrCodeDataUrl,
+          }),
+        });
+
+        if (response.ok) {
+          updateEmailStatus([reg.id], "sent");
+          successCount++;
+        } else {
+          updateEmailStatus([reg.id], "failed");
+        }
+      } catch (error) {
+        console.error("Failed to send email to", reg.email, error);
+        updateEmailStatus([reg.id], "failed");
+      }
     }
 
     setSending(false);
     setSelectedIds(new Set());
-    toast({
-      title: `${toSend.length} ticket(s) sent!`,
-      description: "QR tickets have been emailed to selected participants.",
-    });
+
+    if (successCount > 0) {
+      toast({
+        title: `${successCount} ticket(s) sent!`,
+        description: "QR tickets have been emailed to selected participants.",
+      });
+    } else {
+      toast({
+        title: "Sending Failed",
+        description: "Failed to send tickets. Check console for details.",
+        variant: "destructive"
+      });
+    }
   };
 
   const handleSelectPending = () => {
@@ -276,17 +340,16 @@ const EventDetails = () => {
                   <button
                     key={f}
                     onClick={() => setEmailFilter(f)}
-                    className={`rounded-full px-3 py-1 text-xs font-medium border transition-colors ${
-                      emailFilter === f
-                        ? "bg-primary text-primary-foreground border-primary"
-                        : "bg-muted/50 text-muted-foreground border-border hover:bg-muted"
-                    }`}
+                    className={`rounded-full px-3 py-1 text-xs font-medium border transition-colors ${emailFilter === f
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "bg-muted/50 text-muted-foreground border-border hover:bg-muted"
+                      }`}
                   >
                     {f === "all" ? `All (${emailStats.total})` :
-                     f === "pending" ? `Pending (${emailStats.pending})` :
-                     f === "sent" ? `Sent (${emailStats.sent})` :
-                     f === "failed" ? `Failed (${emailStats.failed})` :
-                     `Invalid (${emailStats.invalid})`}
+                      f === "pending" ? `Pending (${emailStats.pending})` :
+                        f === "sent" ? `Sent (${emailStats.sent})` :
+                          f === "failed" ? `Failed (${emailStats.failed})` :
+                            `Invalid (${emailStats.invalid})`}
                   </button>
                 ))}
               </div>
@@ -325,9 +388,8 @@ const EventDetails = () => {
                       {filtered.map((reg) => (
                         <tr
                           key={reg.id}
-                          className={`border-b border-border/50 hover:bg-muted/20 transition-colors ${
-                            selectedIds.has(reg.id) ? "bg-primary/5" : ""
-                          }`}
+                          className={`border-b border-border/50 hover:bg-muted/20 transition-colors ${selectedIds.has(reg.id) ? "bg-primary/5" : ""
+                            }`}
                         >
                           <td className="px-3 py-2">
                             <Checkbox
@@ -375,10 +437,46 @@ const EventDetails = () => {
           <TabsContent value="registrations" className="space-y-4 mt-4">
             <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
               <p className="text-sm text-muted-foreground">{registrations.length} total registrations</p>
-              <Button variant="outline" size="sm" onClick={handleExportCSV}>
-                <Download className="h-4 w-4 mr-1" />
-                Export CSV
-              </Button>
+              <div className="flex gap-2">
+                <Dialog open={openAddUser} onOpenChange={setOpenAddUser}>
+                  <DialogTrigger asChild>
+                    <Button size="sm">
+                      <Plus className="h-4 w-4 mr-1" />
+                      Add User
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Register User Manually</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="name">Full Name</Label>
+                        <Input id="name" value={newUserName} onChange={(e) => setNewUserName(e.target.value)} placeholder="John Doe" />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="email">Email Address</Label>
+                        <Input id="email" type="email" value={newUserEmail} onChange={(e) => setNewUserEmail(e.target.value)} placeholder="john@example.com" />
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="phone">Phone</Label>
+                          <Input id="phone" value={newUserPhone} onChange={(e) => setNewUserPhone(e.target.value)} placeholder="+1234567890" />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="department">Department</Label>
+                          <Input id="department" value={newUserDept} onChange={(e) => setNewUserDept(e.target.value)} placeholder="Engineering" />
+                        </div>
+                      </div>
+                      <Button onClick={handleAddUser} className="w-full">Register User</Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+                <Button variant="outline" size="sm" onClick={handleExportCSV}>
+                  <Download className="h-4 w-4 mr-1" />
+                  Export CSV
+                </Button>
+              </div>
             </div>
 
             <div className="rounded-xl border border-border bg-card overflow-hidden">
