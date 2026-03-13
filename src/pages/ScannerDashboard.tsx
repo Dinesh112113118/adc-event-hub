@@ -181,8 +181,8 @@ const ScannerDashboard = () => {
         {scanResult && (
           <div
             className={`animate-in rounded-xl border p-5 text-center ${scanResult.success
-                ? "border-success/30 bg-success/10"
-                : "border-destructive/30 bg-destructive/10"
+              ? "border-success/30 bg-success/10"
+              : "border-destructive/30 bg-destructive/10"
               }`}
           >
             {scanResult.success ? (
@@ -214,26 +214,39 @@ const ScannerDashboard = () => {
           </div>
         )}
 
-        {/* Demo QR codes */}
+        {/* Attendees List */}
         {selectedEvent && (
           <div className="rounded-xl border border-border bg-card p-4">
-            <p className="text-xs text-muted-foreground mb-2">Demo QR codes (for testing)</p>
-            <div className="space-y-1">
-              {registrations
-                .filter((r) => r.eventId === selectedEvent)
-                .slice(0, 5)
+            <p className="text-sm font-medium mb-3 flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4 text-success" />
+              Recently Checked In
+            </p>
+            <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+              {eventRegs
+                .filter((r) => r.scans.length > 0)
+                .sort((a, b) => {
+                  const aTime = new Date(a.scans[a.scans.length - 1].scannedAt).getTime();
+                  const bTime = new Date(b.scans[b.scans.length - 1].scannedAt).getTime();
+                  return bTime - aTime;
+                })
+                .slice(0, 50)
                 .map((r) => (
-                  <button
-                    key={r.id}
-                    onClick={() => setQrInput(r.qrCode)}
-                    className="block w-full text-left rounded-lg bg-muted px-3 py-2 text-xs font-mono hover:bg-muted/80 transition-colors"
-                  >
-                    {r.qrCode} — {r.name}
-                    {r.scans.length > 0 && (
-                      <span className="text-success ml-2">✓ {r.scans.length} scan(s)</span>
-                    )}
-                  </button>
+                  <div key={r.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-4 rounded-lg bg-muted/30 px-3 py-2 text-sm">
+                    <div>
+                      <span className="font-medium mr-2">{r.name}</span>
+                      <span className="text-xs text-muted-foreground">{r.department}</span>
+                    </div>
+                    <div className="text-xs text-muted-foreground flex items-center gap-1 sm:ml-auto">
+                      <Zap className="h-3 w-3 text-success shrink-0" />
+                      {new Date(r.scans[r.scans.length - 1].scannedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </div>
+                  </div>
                 ))}
+              {eventRegs.filter((r) => r.scans.length > 0).length === 0 && (
+                <p className="text-xs text-muted-foreground text-center py-4 bg-muted/10 rounded-lg border border-dashed border-border">
+                  No attendees checked in yet.
+                </p>
+              )}
             </div>
           </div>
         )}
