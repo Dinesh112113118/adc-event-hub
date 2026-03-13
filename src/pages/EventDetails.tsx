@@ -131,6 +131,9 @@ const EventDetails = () => {
             name: reg.name,
             eventTitle: event?.title || "ADC Event",
             qrCodeDataUrl,
+            template,
+            department: reg.department,
+            year: reg.year,
           }),
         });
 
