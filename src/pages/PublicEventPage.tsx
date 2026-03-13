@@ -42,6 +42,7 @@ const PublicEventPage = () => {
       department: (data.get("dept") as string) || undefined,
       year: (data.get("year") as string) || undefined,
       paymentStatus: event.paymentRequired ? (event.paymentCollectLater ? "collect_later" : "pending") : "free",
+      emailStatus: "pending" as const,
     });
 
     setSubmitted(true);
