@@ -1,18 +1,20 @@
-import { createContext, useContext, useState, ReactNode } from "react";
-import { Event, Registration, ScanRecord, mockEvents, mockRegistrations } from "@/types/event";
+import { createContext, useContext, useState, ReactNode, useEffect } from "react";
+import { Event, Registration, ScanRecord } from "@/types/event";
+import { supabase } from "@/lib/supabase";
 
 interface EventContextType {
   events: Event[];
   registrations: Registration[];
-  addEvent: (event: Omit<Event, "id" | "slug" | "registeredCount" | "createdAt">) => void;
-  updateEvent: (id: string, data: Partial<Event>) => void;
-  deleteEvent: (id: string) => void;
-  addRegistration: (reg: Omit<Registration, "id" | "qrCode" | "registeredAt" | "scans">) => void;
-  addScan: (registrationId: string, scannedBy: string) => { success: boolean; message: string; name: string };
+  loading: boolean;
+  addEvent: (event: Omit<Event, "id" | "slug" | "registeredCount" | "createdAt">) => Promise<void>;
+  updateEvent: (id: string, data: Partial<Event>) => Promise<void>;
+  deleteEvent: (id: string) => Promise<void>;
+  addRegistration: (reg: Omit<Registration, "id" | "qrCode" | "registeredAt" | "scans">) => Promise<void>;
+  addScan: (registrationId: string, scannedBy: string) => Promise<{ success: boolean; message: string; name: string }>;
   getEventRegistrations: (eventId: string) => Registration[];
   getEventById: (id: string) => Event | undefined;
   getEventBySlug: (slug: string) => Event | undefined;
-  updateEmailStatus: (registrationIds: string[], status: Registration["emailStatus"]) => void;
+  updateEmailStatus: (registrationIds: string[], status: Registration["emailStatus"]) => Promise<void>;
 }
 
 const EventContext = createContext<EventContextType | null>(null);
@@ -29,15 +31,59 @@ const generateSlug = (title: string) =>
 const generateId = () => Math.random().toString(36).substring(2, 10);
 
 const generateQR = (eventId: string, name: string) => {
-  const code = `EVT${eventId}-${generateId().toUpperCase()}`;
-  return code;
+  return `EVT${eventId}-${generateId().toUpperCase()}`;
 };
 
 export const EventProvider = ({ children }: { children: ReactNode }) => {
-  const [events, setEvents] = useState<Event[]>(mockEvents);
-  const [registrations, setRegistrations] = useState<Registration[]>(mockRegistrations);
+  const [events, setEvents] = useState<Event[]>([]);
+  const [registrations, setRegistrations] = useState<Registration[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const addEvent = (data: Omit<Event, "id" | "slug" | "registeredCount" | "createdAt">) => {
+  const fetchData = async () => {
+    setLoading(true);
+    const { data: eventsData } = await supabase.from('events').select('*').order('date', { ascending: true });
+
+    // fetch registrations with their nested scan_records
+    const { data: regsData } = await supabase.from('registrations').select('*, scans:scan_records(*)').order('registeredAt', { ascending: false });
+
+    if (eventsData) setEvents(eventsData as Event[]);
+    if (regsData) setRegistrations(regsData as Registration[]);
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    fetchData();
+
+    // Subscribe to realtime changes
+    const eventsSubscription = supabase
+      .channel('public:events')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'events' }, payload => {
+        fetchData();
+      })
+      .subscribe();
+
+    const regsSubscription = supabase
+      .channel('public:registrations')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'registrations' }, payload => {
+        fetchData();
+      })
+      .subscribe();
+
+    const scansSubscription = supabase
+      .channel('public:scan_records')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'scan_records' }, payload => {
+        fetchData();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(eventsSubscription);
+      supabase.removeChannel(regsSubscription);
+      supabase.removeChannel(scansSubscription);
+    };
+  }, []);
+
+  const addEvent = async (data: Omit<Event, "id" | "slug" | "registeredCount" | "createdAt">) => {
     const newEvent: Event = {
       ...data,
       id: generateId(),
@@ -45,19 +91,25 @@ export const EventProvider = ({ children }: { children: ReactNode }) => {
       registeredCount: 0,
       createdAt: new Date().toISOString(),
     };
+
+    // optimistic
     setEvents((prev) => [newEvent, ...prev]);
+
+    await supabase.from('events').insert([newEvent]);
   };
 
-  const updateEvent = (id: string, data: Partial<Event>) => {
+  const updateEvent = async (id: string, data: Partial<Event>) => {
     setEvents((prev) => prev.map((e) => (e.id === id ? { ...e, ...data } : e)));
+    await supabase.from('events').update(data).eq('id', id);
   };
 
-  const deleteEvent = (id: string) => {
+  const deleteEvent = async (id: string) => {
     setEvents((prev) => prev.filter((e) => e.id !== id));
     setRegistrations((prev) => prev.filter((r) => r.eventId !== id));
+    await supabase.from('events').delete().eq('id', id);
   };
 
-  const addRegistration = (data: Omit<Registration, "id" | "qrCode" | "registeredAt" | "scans">) => {
+  const addRegistration = async (data: Omit<Registration, "id" | "qrCode" | "registeredAt" | "scans">) => {
     const id = generateId();
     const newReg: Registration = {
       ...data,
@@ -66,13 +118,24 @@ export const EventProvider = ({ children }: { children: ReactNode }) => {
       registeredAt: new Date().toISOString(),
       scans: [],
     };
+
     setRegistrations((prev) => [...prev, newReg]);
     setEvents((prev) =>
       prev.map((e) => (e.id === data.eventId ? { ...e, registeredCount: e.registeredCount + 1 } : e))
     );
+
+    // we must insert registration but not the empty scans array
+    const { scans, ...regDataToInsert } = newReg;
+    await supabase.from('registrations').insert([regDataToInsert]);
+
+    // update event count
+    const event = events.find(e => e.id === data.eventId);
+    if (event) {
+      await supabase.from('events').update({ registeredCount: event.registeredCount + 1 }).eq('id', data.eventId);
+    }
   };
 
-  const addScan = (registrationId: string, scannedBy: string) => {
+  const addScan = async (registrationId: string, scannedBy: string) => {
     const reg = registrations.find((r) => r.id === registrationId);
     if (!reg) return { success: false, message: "Registration not found", name: "Unknown" };
 
@@ -104,6 +167,8 @@ export const EventProvider = ({ children }: { children: ReactNode }) => {
       prev.map((r) => (r.id === registrationId ? { ...r, scans: [...r.scans, scan] } : r))
     );
 
+    await supabase.from('scan_records').insert([scan]);
+
     return {
       success: true,
       message: `Entry confirmed ✓ (Scan ${reg.scans.length + 1}${event.scanMode === "daily" ? `, Day scan ${todayScans.length + 1}/${event.maxScansPerDay || "∞"}` : ""})`,
@@ -111,10 +176,11 @@ export const EventProvider = ({ children }: { children: ReactNode }) => {
     };
   };
 
-  const updateEmailStatus = (registrationIds: string[], status: Registration["emailStatus"]) => {
+  const updateEmailStatus = async (registrationIds: string[], status: Registration["emailStatus"]) => {
     setRegistrations((prev) =>
       prev.map((r) => (registrationIds.includes(r.id) ? { ...r, emailStatus: status } : r))
     );
+    await supabase.from('registrations').update({ emailStatus: status }).in('id', registrationIds);
   };
 
   const getEventRegistrations = (eventId: string) => registrations.filter((r) => r.eventId === eventId);
@@ -126,6 +192,7 @@ export const EventProvider = ({ children }: { children: ReactNode }) => {
       value={{
         events,
         registrations,
+        loading,
         addEvent,
         updateEvent,
         deleteEvent,
