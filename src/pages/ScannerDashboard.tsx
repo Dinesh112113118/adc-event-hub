@@ -29,7 +29,7 @@ const ScannerDashboard = () => {
 
   const eventRegs = registrations.filter((r) => r.eventId === selectedEvent);
 
-  const processScan = useCallback((code: string) => {
+  const processScan = useCallback(async (code: string) => {
     if (!selectedEvent) {
       toast({ title: "Select an event first", variant: "destructive" });
       return;
@@ -38,7 +38,7 @@ const ScannerDashboard = () => {
     const reg = registrations.find((r) => r.qrCode === code.trim() && r.eventId === selectedEvent);
     let result;
     if (reg) {
-      result = addScan(reg.id, user.username || "scanner");
+      result = await addScan(reg.id, user.username || "scanner");
     } else {
       result = { success: false, name: "Unknown", message: "Invalid QR code — not found for this event" };
     }
@@ -180,11 +180,10 @@ const ScannerDashboard = () => {
         {/* Scan Result */}
         {scanResult && (
           <div
-            className={`animate-in rounded-xl border p-5 text-center ${
-              scanResult.success
+            className={`animate-in rounded-xl border p-5 text-center ${scanResult.success
                 ? "border-success/30 bg-success/10"
                 : "border-destructive/30 bg-destructive/10"
-            }`}
+              }`}
           >
             {scanResult.success ? (
               <CheckCircle2 className="h-10 w-10 text-success mx-auto mb-2" />
