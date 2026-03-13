@@ -39,8 +39,8 @@ export const EventProvider = ({ children }: { children: ReactNode }) => {
   const [registrations, setRegistrations] = useState<Registration[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const fetchData = async () => {
-    setLoading(true);
+  const fetchData = async (background = false) => {
+    if (!background) setLoading(true);
     const { data: eventsData } = await supabase.from('events').select('*').order('date', { ascending: true });
 
     // fetch registrations with their nested scan_records
@@ -48,7 +48,7 @@ export const EventProvider = ({ children }: { children: ReactNode }) => {
 
     if (eventsData) setEvents(eventsData as Event[]);
     if (regsData) setRegistrations(regsData as Registration[]);
-    setLoading(false);
+    if (!background) setLoading(false);
   };
 
   useEffect(() => {
@@ -58,21 +58,21 @@ export const EventProvider = ({ children }: { children: ReactNode }) => {
     const eventsSubscription = supabase
       .channel('public:events')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'events' }, payload => {
-        fetchData();
+        fetchData(true);
       })
       .subscribe();
 
     const regsSubscription = supabase
       .channel('public:registrations')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'registrations' }, payload => {
-        fetchData();
+        fetchData(true);
       })
       .subscribe();
 
     const scansSubscription = supabase
       .channel('public:scan_records')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'scan_records' }, payload => {
-        fetchData();
+        fetchData(true);
       })
       .subscribe();
 
